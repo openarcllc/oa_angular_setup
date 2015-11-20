@@ -30,9 +30,11 @@ module OaAngularSetup
   # puts initializer.inspect
   # initializer.run
   require 'rails'
-  class Railtie < Rails::Railtie
-    rake_tasks do
-      load "lib/oa_angular_setup.rake"
+  module Rails
+    class Railtie < ::Rails::Railtie
+      rake_tasks do
+        load "lib/oa_angular_setup.rake"
+      end
     end
   end
 end
