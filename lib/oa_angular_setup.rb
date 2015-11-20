@@ -1,5 +1,6 @@
 require "oa_angular_setup/version"
 require "oa_angular_setup/initialize_angular"
+require 'rails'
 
 module OaAngularSetup
   # if ARGV[0].nil?
@@ -29,13 +30,12 @@ module OaAngularSetup
   # initializer = AngularInitializer.new(app_name, create_factories, create_app_js, create_controllers, url)
   # puts initializer.inspect
   # initializer.run
-  require 'rails'
   module Rails
     class Railtie < ::Rails::Railtie
       rake_tasks do
-        load "lib/oa_angular_setup.rake"
+        load "lib/tasks/oa_angular_setup.rake"
       end
     end
   end
 end
-require 'oa_angular_setup/railtie' if defined?(Rails)
+#require 'oa_angular_setup/rails/railtie' if defined?(Rails)
