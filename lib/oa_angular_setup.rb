@@ -29,4 +29,11 @@ module OaAngularSetup
   # initializer = AngularInitializer.new(app_name, create_factories, create_app_js, create_controllers, url)
   # puts initializer.inspect
   # initializer.run
+  require 'rails'
+  class Railtie < Rails::Railtie
+    rake_tasks do
+      load "lib/oa_angular_setup.rake"
+    end
+  end
 end
+require 'oa_angular_setup/railtie' if defined?(Rails)
