@@ -1,23 +1,32 @@
 require 'mechanize'
 require 'nokogiri'
+require 'rails'
 class AngularInitializer
 
-  def initialize(app_name = "App", create_factories = true, create_app_js = true, create_controllers = true, url="http://localhost:3000/api/swagger_doc")
-    @app_name = app_name
-    @factory_name = "#{app_name}Services"
-    @create_factories = create_factories 
-    @create_app_js = create_app_js 
-    @create_controllers = create_controllers
-    @url = url
+  def initialize
+    config = OaAngularSetup.configuration
+    @app_name = config.app_name
+    @factory_name = "#{@app_name}Services"
+    @create_factories = config.create_factories
+    @create_app_js = config.create_app_js
+    @create_controllers = config.create_controllers
+    @url = config.swagger_doc_url
+    @destination = "#{Rails.root}#{config.destination}"
+  end
+
+  def test
+    puts "in app"
+    puts @app_name
   end
 
   def run
+    Dir.mkdir("#{@destination}") unless File.exists?("#{@destination}")
     mechanize = Mechanize.new
     page = mechanize.get(@url)
     body = JSON.parse(page.body)
 
     if @create_app_js
-      app_js_file = File.open("#{@app_name}.js", 'w')
+      app_js_file = File.open("#{@destination}#{@app_name}.js", 'w')
       if @create_factories
         app_js_file.write("var #{@app_name} = angular.module('#{@app_name}', ['ngRoute', '#{@factory_name}']); \n")
       else
@@ -80,12 +89,12 @@ class AngularInitializer
   end
 
   def write_factories(apis, model, name)
-    Dir.mkdir("factories") unless File.exists?("factories")
+    Dir.mkdir("#{@destination}factories") unless File.exists?("#{@destination}factories")
 
     fh1 = name + ".factory('"
     fh2 = "', ['$resource', function($resource){\n"
 
-    fname = "factories/" + model.gsub("/","") + "_factory.js" 
+    fname = "#{@destination}factories/" + model.gsub("/","") + "_factory.js" 
     outfile = File.open(fname, 'w')
     outfile.write(fh1 + model.gsub("/","").chomp('s').capitalize + fh2)
     outfile.write("  return $resource('api/v1" + model + "/:id/:action', {}, { \n")
@@ -155,10 +164,10 @@ class AngularInitializer
   end
 
   def write_controllers(apis, model_name, app_name)
-    Dir.mkdir("controllers") unless File.exists?("controllers") 
+    Dir.mkdir("#{@destination}controllers") unless File.exists?("#{@destination}controllers") 
     model = model_name.delete('/')
     service = model.chomp('s').capitalize
-    outfile = File.open("controllers/#{model}_controllers.js", 'w')
+    outfile = File.open("#{@destination}controllers/#{model}_controllers.js", 'w')
     apis.each do |endpoint|
       endpoint["operations"].each do |op|
         case op["method"]
