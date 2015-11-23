@@ -21,8 +21,21 @@ Or install it yourself as:
     $ gem install oa_angular_setup
 
 ## Usage
+To Configure any of the settings create a new initializer and add 
+```ruby
 
-TODO: Write usage instructions here
+  OaAngularSetup.configure do |config|
+    # Set the options to what makes sense for you
+
+    config.app_name = 'App'
+    config.create_factories = true 
+    config.create_app_js = true 
+    config.create_controllers = true
+    config.swagger_doc_url = "http://localhost:3000/api/swagger_doc"
+    config.destination = "/public/angular/"
+  end
+
+```
 
 ## Development
 
