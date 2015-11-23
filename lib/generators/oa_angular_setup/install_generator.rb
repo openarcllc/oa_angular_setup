@@ -1,3 +1,5 @@
+require 'rails/generators/base'
+
 module OaAngularSetup
   module Generators
     class InstallGenerator < Rails::Generators::Base
