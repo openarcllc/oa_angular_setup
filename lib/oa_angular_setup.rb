@@ -18,13 +18,14 @@ module OaAngularSetup
 
   class Configuration
     attr_accessor :app_name, :create_factories, :create_app_js,
-      :create_controllers, :swagger_doc_url, :destination
+      :create_controllers, :swagger_doc_url, :destination, :add_swaggger_ui
 
     def initialize
       @app_name = 'App'
       @create_factories = true 
       @create_app_js = true 
       @create_controllers = true
+      @add_swaggger_ui = true
       @swagger_doc_url = "http://localhost:3000/api/swagger_doc"
       @destination = "/public/angular/"
     end

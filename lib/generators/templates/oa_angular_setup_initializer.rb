@@ -18,4 +18,7 @@ OaAngularSetup.configure do |config|
 
   #The Destination where the files will be created, starting from your Rails.root . (default: "/public/angular/")
   config.destination = "/public/angular/"
+
+  #Download and implement swagger-ui true/false (default: true)
+  config.add_swaggger_ui = true
 end
