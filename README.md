@@ -26,7 +26,9 @@ rake oa_angular_setup:create
 ```  
 
 
-To Configure any of the settings create a new initializer and add 
+To Configure any of the settings run: 
+```ruby rails g oa_angular_setup:install ```
+or create a new initializer and add the following
 ```ruby
   OaAngularSetup.configure do |config|
     # Set the options to what makes sense for you
