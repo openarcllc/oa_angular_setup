@@ -23,4 +23,10 @@ namespace :oa_angular_setup do
       end
     end
   end
+
+  desc 'Create angular server'
+  task :update => :environment do
+    initializer = AngularInitializer.new
+    initializer.update
+  end
 end

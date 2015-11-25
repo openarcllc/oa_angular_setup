@@ -55,7 +55,7 @@ or create a new initializer and add the following
 
 ## Contributing
 
-Bug reports and pull requests can be made on GitHub at https://github.com/markvanarsdale/oa_angular_setup.
+Bug reports and pull requests can be made on GitHub at https://github.com/openarcllc/oa_angular_setup.
 
 
 ## License
