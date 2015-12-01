@@ -2,6 +2,8 @@
 
 The OaAngularSetup gem will read a swagger compliant API and generate angular factories & controllers. 
 
+Note: this gem requires rails
+
 ## Installation
 
 Add this line to your application's Gemfile:
