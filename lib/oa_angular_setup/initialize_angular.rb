@@ -14,37 +14,56 @@ class AngularInitializer
     @destination = "#{Rails.root}#{config.destination}"
   end
 
-  def test
-    puts "in app"
-    puts @app_name
+  def add_angular
+    #add in swagger ui
+    if OaAngularSetup.configuration.add_swaggger_ui
+      if !File.exists?("#{Rails.root}/public/api/docs/")
+        #get files and move into place
+        Dir.mkdir("#{Rails.root}/public/api") unless File.exists?("#{Rails.root}/public/api")
+        system "npm install swagger-ui" unless File.exists?("#{Rails.root}/node_modules/swagger-ui/")      
+        system "cp -R #{Rails.root}/node_modules/swagger-ui/dist #{Rails.root}/public/api/docs" 
+
+        #replace dummy url
+        file_name = "#{Rails.root}/public/api/docs/index.html"
+        text = File.read(file_name)
+        new_contents = text.gsub('http://petstore.swagger.io/v2/swagger.json', @url)
+        File.open(file_name, "w") {|file| file.puts new_contents }
+      end
+    end
   end
 
   def update
     mechanize = Mechanize.new
     page = mechanize.get(@url)
     body = JSON.parse(page.body)
+    app_bodies = {}
 
     body["apis"].each do |api|
       model = api["path"].split('.')[0]
       api_page = mechanize.get(@url + model)
       api_body = JSON.parse(api_page.body)
+      app_bodies[model] = api_body["apis"]
 
       update_factory(api_body["apis"], model, @factory_name) if @create_factories
       update_controllers(api_body["apis"], model, @app_name) if @create_controllers
-      # write_app_js(api_body["apis"], model, app_js_file) if @create_app_js 
-
-      write_backups
     end
+    update_app_js(app_bodies) if @create_app_js 
+
+    write_backups
   end
 
   def write_backups
+    Dir.mkdir("#{@destination}backups/") unless File.exists?("#{@destination}backups/")
     if @create_factories
-      Dir.mkdir("#{@destination}factories_backups/") unless File.exists?("#{@destination}factories_backups/")
-      FileUtils.cp_r "#{@destination}factories/.", "#{@destination}factories_backups/"
+      Dir.mkdir("#{@destination}backups/factories/") unless File.exists?("#{@destination}backups/factories/")
+      FileUtils.cp_r "#{@destination}factories/.", "#{@destination}backups/factories/"
     end
     if @create_factories
-      Dir.mkdir("#{@destination}controllers_backups/") unless File.exists?("#{@destination}controllers_backups/")
-      FileUtils.cp_r "#{@destination}controllers/.", "#{@destination}controllers_backups/"
+      Dir.mkdir("#{@destination}backups/controllers/") unless File.exists?("#{@destination}backups/controllers/")
+      FileUtils.cp_r "#{@destination}controllers/.", "#{@destination}backups/controllers/"
+    end
+    if @create_app_js
+      FileUtils.cp "#{@destination}#{@app_name}.js", "#{@destination}backups/#{@app_name}.js"
     end
   end
 
@@ -74,7 +93,6 @@ class AngularInitializer
       write_factories(api_body["apis"], model, @factory_name) if @create_factories
       write_app_js(api_body["apis"], model, app_js_file) if @create_app_js 
       write_controllers(api_body["apis"], model, @app_name) if @create_controllers
-
     end
 
     if @create_app_js
@@ -124,173 +142,30 @@ class AngularInitializer
     end
   end
 
-  def update_factory(apis, model, name)
-    Dir.mkdir("#{@destination}factories") unless File.exists?("#{@destination}factories")
-
-    fh1 = name + ".factory('"
-    fh2 = "', ['$resource', function($resource){\n"
-    fname = "#{@destination}factories/" + model.gsub("/","") + "_factory.js" 
-
-    backup_file = File.open("#{@destination}factories_backups/" + model.gsub("/","") + "_factory.js", 'r')
-    backup_contents = backup_file.read.split("\n")
-    backup_file.close
-    file = File.open(fname, 'r')
-    file_contents = file.read.split("\n")
-    file.close
-
-    edited_lines = []
-    edited_methods = []
-    edited_lines.push(fh1 + model.gsub("/","").chomp('s').capitalize + fh2)
-    edited_lines.push("  return $resource('api/v1" + model + "/:id/:action', {}, { \n")
-    file_contents.each_with_index do |line, index|
-      next if(line.match(/^\/\//i) || backup_contents.include?(line))
-      edited_lines.push(file_contents[(index-1)]+"\n")   
-      edited_lines.push(line+"\n")
-      method = line.split(":")[0]
-      edited_methods.push(method)
-    end
-
-    apis.each do |endpoint|
-      endpoint["operations"].each do |op|
-
-        string = ""
-        case op["method"]
-        when /GET/
-          string = output_to_angular(string, op["method"], endpoint["path"])
-        when /PUT/
-          string = output_to_angular(string, op["method"], endpoint["path"])
-        when /POST/
-          string = "    create: {method:'POST'}"
-        when /DELETE/
-          string = "    destroy: {method:'DELETE'}"
-        end
-
-        if( !file_contents.include?(string) && backup_contents.include?(string) )
-          next
-        end
-        next if(edited_methods.include?(string.split(":")[0]))
-        edited_lines.push("    // #{op['summary']} \n")
-        edited_lines.push(string)
-
-
-        if op == endpoint["operations"].last && endpoint == apis.last
-          edited_lines.push("\n")
-        else
-          edited_lines.push(",\n")
-        end
-      end
-    end
-    edited_lines.push("  });\n")
-    edited_lines.push("}]);\n")
-
-    outfile = File.open(fname, 'w')
-    outfile.write(edited_lines.join)
-    outfile.close
-  end
-
-  def update_controllers(apis, model_name, app_name)
-    Dir.mkdir("#{@destination}controllers") unless File.exists?("#{@destination}controllers") 
-    output = []
-    model = model_name.delete('/')
-    service = model.chomp('s').capitalize
-
-    backup_file = File.open("#{@destination}controllers_backups/#{model}_controllers.js", 'r')
-    backup_contents = backup_file.read
-    backup_file.close
-    file = File.open("#{@destination}controllers/#{model}_controllers.js", 'r')
-    file_contents = file.read
-    file.close
-
-    controllers = file_contents.scan(/angular.module.*?}\]\);/im)
-    backup_controllers = backup_contents.scan(/angular.module.*?}\]\);/im)
-
-    edited_controller_titles = []
-    controllers.each_with_index do |controller, index|
-      next if(backup_controllers.include?(controller))
-      output.push(controller+" \n \n")
-      controller_title = controller.match(/.controller\('(.*?)'/im)[1]
-      edited_controller_titles.push(controller_title)
-    end
-
-    apis.each do |endpoint|
-      endpoint["operations"].each do |op|
-        string = ""
-        controller_title = ""
-        ep_path = endpoint["path"].split('/')
-        case op["method"]
-        when /GET/
-          if ep_path[4].nil?
-            if endpoint["path"].include?("id")
-              controller_title = "#{model.capitalize}IndexCtrl"
-              string += "angular.module('#{@app_name}').controller('#{controller_title}', ['$scope', '#{service}', function ($scope, #{service}) { \n"
-              string += "  $scope.#{model} = #{service}.query(); \n"
-              string += "}]); \n"
-              string += " \n"
-            else
-              controller_title = "#{model.capitalize}ShowCtrl"
-              string += "angular.module('#{@app_name}').controller('#{controller_title}', ['$scope', '$routeParams', '#{service}', function ($scope, $routeParams, #{service}) { \n"
-              string += "  $scope.id = $routeParams.id; \n"
-              string += "}]); \n"
-              string += " \n"
-            end
-          end
-        when /PUT/
-          if ep_path[4].nil?
-            controller_title = "#{model.capitalize}EditCtrl"
-            string += "angular.module('#{@app_name}').controller('#{controller_title}', ['$scope', '$routeParams', '#{service}', function ($scope, $routeParams, #{service}) { \n"
-            string += "  $scope.id = $routeParams.id; \n"
-            string += "}]); \n"
-            string += " \n"
-          end
-        when /POST/
-          controller_title = "#{model.capitalize}NewCtrl"
-          string += "angular.module('#{@app_name}').controller('#{controller_title}', ['$scope', '#{service}', function ($scope, #{service}) { \n"
-          string += "}]); \n"
-          string += " \n"
-        end
-
-        output.push(string) unless edited_controller_titles.include?(controller_title)
-      end
-    end
-    outfile = File.open("#{@destination}controllers/#{model}_controllers.js", 'w')
-    outfile.write(output.join)
-    outfile.close
-  end
-
   def write_factories(apis, model, name)
     Dir.mkdir("#{@destination}factories") unless File.exists?("#{@destination}factories")
 
     fh1 = name + ".factory('"
     fh2 = "', ['$resource', function($resource){\n"
-
+    output = []
     fname = "#{@destination}factories/" + model.gsub("/","") + "_factory.js" 
-    outfile = File.open(fname, 'w')
-    outfile.write(fh1 + model.gsub("/","").chomp('s').capitalize + fh2)
-    outfile.write("  return $resource('api/v1" + model + "/:id/:action', {}, { \n")
+    output_string = fh1 + model.gsub("/","").chomp('s').capitalize + fh2
+    output_string += "  return $resource('api/v1" + model + "/:id/:action', {}, { \n"
     
     apis.each do |endpoint|
       endpoint["operations"].each do |op|
-        outfile.write("    // #{op['summary']} \n")
-        ep_path = endpoint["path"].split('/')
-        case op["method"]
-        when /GET/
-          output_to_angular(outfile, op["method"], endpoint["path"])
-        when /PUT/
-          output_to_angular(outfile, op["method"], endpoint["path"])
-        when /POST/
-          outfile.write("    create: {method:'POST'}")
-        when /DELETE/
-          outfile.write("    destroy: {method:'DELETE'}")
-        end
-        if op == endpoint["operations"].last && endpoint == apis.last
-          outfile.write("\n")
-        else
-          outfile.write(",\n")
-        end
+        string = write_factory(endpoint, op)
+        string = "    // #{op['summary']} \n"+string
+        output.push(string)
       end
     end
-    outfile.write("  });\n")
-    outfile.write("}]);\n")
+
+    output_string += output.join(",\n")
+    output_string += "\n  });\n"
+    output_string += "}]);\n"
+
+    outfile = File.open(fname, 'w')
+    outfile.write(output_string)
     outfile.close
   end
 
@@ -335,42 +210,211 @@ class AngularInitializer
   def write_controllers(apis, model_name, app_name)
     Dir.mkdir("#{@destination}controllers") unless File.exists?("#{@destination}controllers") 
     model = model_name.delete('/')
-    service = model.chomp('s').capitalize
-    outfile = File.open("#{@destination}controllers/#{model}_controllers.js", 'w')
+    output = []
     apis.each do |endpoint|
       endpoint["operations"].each do |op|
-        case op["method"]
-        when /GET/
-          ep_path = endpoint["path"].split('/')
-          if ep_path[4].nil?
-            if endpoint["path"].include?("id")
-              outfile.write("angular.module('#{@app_name}').controller('#{model.capitalize}IndexCtrl', ['$scope', '#{service}', function ($scope, #{service}) { \n")
-              outfile.write("  $scope.#{model} = #{service}.query(); \n")
-              outfile.write("}]); \n")
-              outfile.write(" \n")
-            else
-              outfile.write("angular.module('#{@app_name}').controller('#{model.capitalize}ShowCtrl', ['$scope', '$routeParams', '#{service}', function ($scope, $routeParams, #{service}) { \n")
-              outfile.write("  $scope.id = $routeParams.id; \n");
-              outfile.write("}]); \n")
-              outfile.write(" \n")
-            end
+        string,controller_title = write_controller(model, endpoint, op)       
+        output.push(string)
+      end
+    end
+    outfile = File.open("#{@destination}controllers/#{model}_controllers.js", 'w')
+    outfile.write(output.join)
+    outfile.close
+  end
+
+  def update_factory(apis, model, name)
+    Dir.mkdir("#{@destination}factories") unless File.exists?("#{@destination}factories")
+
+    fh1 = name + ".factory('"
+    fh2 = "', ['$resource', function($resource){\n"
+    fname = "#{@destination}factories/" + model.gsub("/","") + "_factory.js" 
+    # backup_contents = File.read("#{@destination}backups/factories/" + model.gsub("/","") + "_factory.js").split("\n")
+    file_contents = File.read(fname)
+    file_contents_lines = file_contents.split("\n")
+    first_lines = file_contents_lines.shift(2)
+    output_string = first_lines.join("\n")+"\n"
+    file_contents_lines.pop(2) #drop last two closing lines so they arent added twice
+    paths = file_contents.scan(/\n\s*(\w*?):/i).flatten
+
+    output = []
+    file_contents_lines.each_with_index do |line, index|
+      output.push(line.chomp(","))
+    end
+
+    apis.each do |endpoint|
+      endpoint["operations"].each do |op|
+        string = write_factory(endpoint, op)
+        next if output.include?(string)          
+        next if(paths.include?(string.split(":")[0]))
+        string = "    // #{op['summary']} \n"+string
+        output.push(string)
+      end
+    end
+
+    output_string += output.join(",\n")
+    output_string += "\n  });\n"
+    output_string += "}]);\n"
+
+    outfile = File.open(fname, 'w')
+    outfile.write(output_string)
+    outfile.close
+  end
+
+  def write_controller(model, endpoint, op)
+    string = ""
+    controller_title = ""
+    service = model.chomp('s').capitalize
+    ep_path = endpoint["path"].split('/')
+    case op["method"]
+    when /GET/
+      if ep_path[4].nil?
+        if endpoint["path"].include?("id")
+          controller_title = "#{model.capitalize}ShowCtrl"
+          string += "angular.module('#{@app_name}').controller('#{controller_title}', ['$scope', '$routeParams', '#{service}', function ($scope, $routeParams, #{service}) { \n"
+          string += "  $scope.id = $routeParams.id; \n"
+          string += "}]); \n"
+          string += " \n"
+        else
+          controller_title = "#{model.capitalize}IndexCtrl"
+          string += "angular.module('#{@app_name}').controller('#{controller_title}', ['$scope', '#{service}', function ($scope, #{service}) { \n"
+          string += "  $scope.#{model} = #{service}.query(); \n"
+          string += "}]); \n"
+          string += " \n"
+        end
+      end
+    when /PUT/
+      if ep_path[4].nil?
+        controller_title = "#{model.capitalize}EditCtrl"
+        string += "angular.module('#{@app_name}').controller('#{controller_title}', ['$scope', '$routeParams', '#{service}', function ($scope, $routeParams, #{service}) { \n"
+        string += "  $scope.id = $routeParams.id; \n"
+        string += "}]); \n"
+        string += " \n"
+      end
+    when /POST/
+      controller_title = "#{model.capitalize}NewCtrl"
+      string += "angular.module('#{@app_name}').controller('#{controller_title}', ['$scope', '#{service}', function ($scope, #{service}) { \n"
+      string += "}]); \n"
+      string += " \n"
+    end
+
+    return string, controller_title
+  end
+
+  def write_factory(endpoint, op)
+    string = ""
+    case op["method"]
+    when /GET/
+      string = output_to_angular(string, op["method"], endpoint["path"])
+    when /PUT/
+      string = output_to_angular(string, op["method"], endpoint["path"])
+    when /POST/
+      string = "    create: {method:'POST'}"
+    when /DELETE/
+      string = "    destroy: {method:'DELETE'}"
+    end
+
+    return string
+  end
+
+  def update_controllers(apis, model_name, app_name)
+    Dir.mkdir("#{@destination}controllers") unless File.exists?("#{@destination}controllers") 
+    output, edited_controller_titles = [], []
+    model = model_name.delete('/')
+    file_contents = File.read("#{@destination}controllers/#{model}_controllers.js")
+    controller_names = file_contents.scan(/controller\('(.*?)'/im).flatten
+    controllers = file_contents.scan(/angular.module.*?}\]\);/im)
+
+    controllers.each do |controller|
+      output.push(controller+" \n \n")
+    end
+
+    apis.each do |endpoint|
+      endpoint["operations"].each do |op|
+        string,controller_title = write_controller(model, endpoint, op)       
+
+        output.push(string) unless controller_names.include?(controller_title)
+      end
+    end
+    outfile = File.open("#{@destination}controllers/#{model}_controllers.js", 'w')
+    outfile.write(output.join)
+    outfile.close
+  end
+
+  def update_app_js(apis)
+    output, edited_routes = [],[]
+    file_contents = File.read("#{@destination}#{@app_name}.js")
+    routes = file_contents.scan(/when\(.*?}\)\./im)
+    route_paths = file_contents.scan(/when\('(.*?)'/im).flatten
+
+    if @create_app_js
+      if @create_factories
+        output.push("var #{@app_name} = angular.module('#{@app_name}', ['ngRoute', '#{@factory_name}']); \n")
+      else
+        output.push("var #{@app_name} = angular.module('#{@app_name}', ['ngRoute']); \n")
+      end
+      output.push("\n #{@app_name}.config(['$routeProvider', function($routeProvider) { \n  $routeProvider.\n");
+    end
+
+    routes.each_with_index do |route, index|
+      output.push("    #{route} \n ")
+    end
+
+    apis.each do |model_name, model_api|
+      model = model_name.delete('/')
+      model_api.each do |endpoint|
+        endpoint["operations"].each do |op|
+          string , route_path = "",""
+          case op["method"]
+            when /GET/
+              ep_path = endpoint["path"].split('/')
+              if ep_path[4].nil?
+                if endpoint["path"].include?("id")
+                  route_path = "/#{model}/:id"
+                  string += "    when('#{route_path}', { \n"
+                  string += "      template@url: '/angular/templates/#{model}/show.html', \n"
+                  string += "      controller:  '#{model.capitalize}ShowCtrl' \n"
+                else
+                  ctrl = 'index'
+                  route_path = "/#{model}"
+                  string += "    when('#{route_path}', { \n"
+                  string += "      template@url: '/angular/templates/#{model}/index.html',\n"
+                  string += "      controller:  '#{model.capitalize}IndexCtrl' \n"
+                end
+                string += "    }). \n"
+              end
+            when /PUT/
+              ep_path = endpoint["path"].split('/')
+              if ep_path[4].nil?
+                route_path = "/#{model}/:id/edit"
+                string += "    when('#{route_path}', { \n"
+                string += "      template@url: '/angular/templates/#{model}/edit.html', \n"
+                string += "      controller:  '#{model.capitalize}EditCtrl' \n"
+                string += "    }). \n"
+              end
+            when /POST/
+              route_path = "/#{model}/new"
+              string += "    when('#{route_path}', { \n"
+              string += "      template@url: '/angular/templates/#{model}/new.html', \n"
+              string += "      controller: '#{model.capitalize}NewCtrl' \n"
+              string += "    }). \n"
           end
-        when /PUT/
-          ep_path = endpoint["path"].split('/')
-          if ep_path[4].nil?
-            outfile.write("angular.module('#{@app_name}').controller('#{model.capitalize}EditCtrl', ['$scope', '$routeParams', '#{service}', function ($scope, $routeParams, #{service}) { \n")
-            outfile.write("  $scope.id = $routeParams.id; \n");
-            outfile.write("}]); \n")
-            outfile.write(" \n")
-          end
-        when /POST/
-          outfile.write("angular.module('#{@app_name}').controller('#{model.capitalize}NewCtrl', ['$scope', '#{service}', function ($scope, #{service}) { \n")
-          outfile.write("}]); \n")
-          outfile.write(" \n")
+          output.push(string) unless route_paths.include?(route_path)
+          
         end
       end
     end
-    outfile.close
+    output.push("    otherwise({ \n")
+    output.push("      redirectTo: '/' \n")
+    output.push("    }); \n")
+    output.push("}]); \n")
+    if @create_factories
+      output.push("\n")
+      output.push("var #{@factory_name} = angular.module('#{@factory_name}', ['ngResource']); \n")
+    end
+    app_js_file = File.open("#{@destination}#{@app_name}.js", 'w')
+    app_js_file.write(output.join)
+    app_js_file.close
   end
+
 end
 
