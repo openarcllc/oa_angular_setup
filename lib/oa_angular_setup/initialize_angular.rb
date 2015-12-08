@@ -225,7 +225,7 @@ class AngularInitializer
 
   def update_factory(apis, model, name)
     Dir.mkdir("#{@destination}factories") unless File.exists?("#{@destination}factories")
-    return write_factories(apis, model_name, app_name) unless File.exists?("#{@destination}factories/#{model}_factory.js") 
+    return write_factories(apis, model, name) unless File.exists?("#{@destination}factories/#{model}_factory.js") 
 
     fh1 = name + ".factory('"
     fh2 = "', ['$resource', function($resource){\n"
