@@ -225,6 +225,7 @@ class AngularInitializer
 
   def update_factory(apis, model, name)
     Dir.mkdir("#{@destination}factories") unless File.exists?("#{@destination}factories")
+    return write_factories(apis, model_name, app_name) unless File.exists?("#{@destination}factories/#{model}_factory.js") 
 
     fh1 = name + ".factory('"
     fh2 = "', ['$resource', function($resource){\n"
@@ -319,6 +320,7 @@ class AngularInitializer
 
   def update_controllers(apis, model_name, app_name)
     Dir.mkdir("#{@destination}controllers") unless File.exists?("#{@destination}controllers") 
+    return write_controllers(apis, model_name, app_name) unless File.exists?("#{@destination}controllers/#{model}_controllers.js") 
     output, edited_controller_titles = [], []
     model = model_name.delete('/')
     file_contents = File.read("#{@destination}controllers/#{model}_controllers.js")
