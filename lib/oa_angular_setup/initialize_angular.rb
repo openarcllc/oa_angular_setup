@@ -69,6 +69,7 @@ class AngularInitializer
 
   def run
     Dir.mkdir("#{@destination}") unless File.exists?("#{@destination}")
+    add_angular
     mechanize = Mechanize.new
     page = mechanize.get(@url)
     body = JSON.parse(page.body)

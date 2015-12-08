@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = "A gem to setup angular factories"
   spec.description   = "A gem to setup angular factories"
-  spec.homepage      = "TODO: Put your gem's website or public repo URL here."
+  spec.homepage      = "https://github.com/openarcllc/oa_angular_setup"
   spec.license       = "MIT"
 
   # Prevent pushing this gem to RubyGems.org by setting 'allowed_push_host', or
@@ -27,7 +27,10 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
+  spec.add_runtime_dependency "mechanize"
+  spec.add_runtime_dependency "nokogiri"
+
   spec.add_development_dependency "bundler", "~> 1.10"
   spec.add_development_dependency "rake", "~> 10.0"
-  spec.add_development_dependency "rspec"
+  spec.add_development_dependency "rspec", '~> 0'
 end
